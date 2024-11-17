@@ -1,0 +1,29 @@
+name: mathscrape
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  # Base dependencies
+  - python=3.10
+  - pip
+  - numpy=1.26.4  # Updated to numpy 2.0 for compatibility
+  
+  # Scientific and visualization
+  - matplotlib=3.7.2
+  - pillow=10.0.0
+  - python-dotenv=1.0.0
+  - opencv=4.8.1  # Using conda's opencv instead of pip's
+  
+  # Deep learning
+  - pytorch=2.1.0
+  - pytorch::torchvision=0.16.0
+  - pytorch::cpuonly  # Add this if you don't have a GPU
+  
+  # Additional dependencies via pip
+  - pip:
+    - pytesseract==0.3.10
+    - pix2tex==0.1.2
+    - transformers
+    - timm
+    - einops
