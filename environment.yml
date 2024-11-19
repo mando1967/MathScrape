@@ -7,22 +7,22 @@ dependencies:
   # Base dependencies
   - python=3.10
   - pip
-  - numpy=1.26.4  # Updated to numpy 2.0 for compatibility
+  - numpy=1.24.3
   
   # Scientific and visualization
   - matplotlib=3.7.2
   - pillow=10.0.0
   - python-dotenv=1.0.0
-  - opencv=4.8.1  # Using conda's opencv instead of pip's
+  - opencv=4.8.1  # Using conda-installed opencv
+  - pytesseract=0.3.10  # Using conda-installed pytesseract
   
   # Deep learning
   - pytorch=2.1.0
-  - pytorch::torchvision=0.16.0
-  - pytorch::cpuonly  # Add this if you don't have a GPU
+  - torchvision=0.16.0
+  - cpuonly  # Remove this if you have a GPU
   
   # Additional dependencies via pip
   - pip:
-    - pytesseract==0.3.10
     - pix2tex==0.1.2
     - transformers
     - timm
