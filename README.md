@@ -13,6 +13,28 @@ A Python application for extracting and converting mathematical expressions from
 - Handles common OCR misrecognitions and formatting issues
 - Visualizes detected math regions in the image
 
+## Sample Output
+
+Here's an example of MathScrape processing three different types of mathematical expressions:
+
+![Math Problem Detection](visualization.png)
+
+### Detected Expressions and LaTeX Output:
+
+1. Quadratic Equation
+   - Text: x?+5x+6=0
+   - LaTeX: x^2+5x+6=0
+
+2. Integral
+   - Text: J(x2-+1)dx
+   - LaTeX: \int(x^{2}-1)\,dx
+
+3. Limit
+   - Text: lim(x--)1/x=0
+   - LaTeX: \lim_{x \to \infty}\frac{1}{x}=0
+
+The visualization shows how MathScrape detects and processes each expression, with different colors indicating separate mathematical problems.
+
 ## Requirements
 
 - Python 3.7+
