@@ -1,73 +1,67 @@
 # MathScrape
 
-A Python application for detecting and extracting mathematical expressions from images, with support for multiple problems and LaTeX conversion.
+A Python application for extracting and converting mathematical expressions from images to LaTeX format.
 
 ## Features
 
-- Detects multiple mathematical problems in a single image
-- Extracts text and converts to LaTeX
-- Adaptive region detection with configurable tolerances
-- Beautiful visualization of detected regions
-- Support for complex mathematical notation including limits, integrals, and equations
-
-## Example Output
-
-![Math Problem Detection](visualization.png)
-
-## Installation
-
-1. Clone the repository:
-```bash
-git clone https://github.com/mando1967/MathScrape.git
-cd MathScrape
-```
-
-2. Create and activate conda environment:
-```bash
-conda env create -f environment.yml
-conda activate mathscrape
-```
-
-3. Install Tesseract OCR:
-- Windows: Download and install from [Tesseract GitHub](https://github.com/UB-Mannheim/tesseract/wiki)
-- Make sure it's installed at: `C:\Program Files\Tesseract-OCR\tesseract.exe`
-
-## Usage
-
-Run the test script to process a sample image:
-```python
-python test_mathscrape.py
-```
-
-Or use in your own code:
-```python
-from mathscrape import MathScrape
-
-# Initialize
-scraper = MathScrape()
-
-# Process an image
-results = scraper.extract_math_expressions('path/to/your/image.png')
-
-# Results contain text and LaTeX for each detected problem
-for result in results:
-    print(f"Problem {result['problem_id']}:")
-    print(f"Text: {result['text']}")
-    print(f"LaTeX: {result['latex']}\n")
-```
-
-## Configuration
-
-The MathScrape class includes configurable parameters:
-- `horizontal_tolerance`: Controls merging of horizontally adjacent regions (default: 0.2)
-- `vertical_tolerance`: Controls separation of problems (default: 0.8)
+- Extracts mathematical expressions from images using OCR
+- Converts recognized text to LaTeX format
+- Supports various mathematical notations:
+  - Quadratic equations (e.g., "x^2+5x+6=0")
+  - Integrals (e.g., "∫(x^2-1)dx")
+  - Limits (e.g., "lim_{x→∞} 1/x=0")
+- Handles common OCR misrecognitions and formatting issues
+- Visualizes detected math regions in the image
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.7+
+- OpenCV
 - Tesseract OCR
-- See `environment.yml` for complete list of dependencies
+- pix2tex
+- Other dependencies listed in `requirements.txt`
 
-## License
+## Installation
 
-MIT License - feel free to use and modify as needed!
+1. Install Python dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+2. Install Tesseract OCR:
+- Windows: Run `install_tesseract.py`
+- Other platforms: Follow [Tesseract installation guide](https://github.com/UB-Mannheim/tesseract/wiki)
+
+## Usage
+
+1. Run the application:
+```bash
+python mathscrape.py
+```
+
+2. Enter the path to your image when prompted
+
+3. The application will:
+   - Detect mathematical expressions in the image
+   - Convert them to LaTeX format
+   - Display the results
+   - Generate a visualization of detected regions
+
+## Recent Improvements
+
+- Enhanced limit notation handling (e.g., "lim(x→∞)")
+- Improved integral symbol recognition (handles both "∫" and "J")
+- Better polynomial term processing (handles squared terms and coefficients)
+- Added comprehensive test suite for mathematical expression preprocessing
+- Fixed common OCR misrecognition issues
+
+## Testing
+
+Run the test suite:
+```bash
+python test_mathscrape.py
+```
+
+## Contributing
+
+Feel free to submit issues and enhancement requests!

@@ -314,13 +314,121 @@ class MathScrape:
                 config='--psm 7 -c tessedit_char_whitelist=0123456789+-=()[]{}^*/abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ∫∞→'
             ).strip()
             
+            # Debug print to see exact characters
+            print(f"Raw OCR output: {[ord(c) for c in text]}")
+            print(f"Characters: {[c for c in text]}")
+            
+            # Preprocess text for LaTeX conversion
+            processed_text = text
+            
+            # Handle polynomial terms
+            import re
+            
+            # Replace x? with x^2 (common OCR misrecognition)
+            processed_text = processed_text.replace('x?', 'x^2')
+            
+            # Handle other polynomial patterns
+            processed_text = re.sub(r'x(\d)', r'x^{\1}', processed_text)  # Convert x2 to x^{2}
+            processed_text = re.sub(r'(\d)x', r'\1x', processed_text)     # Ensure proper coefficient format
+            
+            # Replace common x-like characters with 'x'
+            x_like_chars = ['×', '✕', '⨯', 'х', 'Х']  # Various Unicode x-like characters
+            for x_char in x_like_chars:
+                processed_text = processed_text.replace(x_char, 'x')
+            
+            # Handle integral symbol (including when recognized as 'J')
+            if 'J' in text or '∫' in text:
+                # Replace 'J' or '∫' with proper LaTeX integral
+                processed_text = processed_text.replace('J', '\\int')
+                processed_text = processed_text.replace('∫', '\\int')
+                
+                # Handle polynomial expressions within integrals
+                import re
+                
+                # Handle x^2 patterns (including when recognized as x2)
+                processed_text = re.sub(r'x2', 'x^2', processed_text)
+                processed_text = re.sub(r'x\^2', 'x^{2}', processed_text)
+                
+                # Handle addition/subtraction in polynomials
+                processed_text = processed_text.replace('-+', '-')  # Fix common OCR error
+                
+                # Add multiplication symbol for coefficient terms
+                processed_text = re.sub(r'(\d)x', r'\1\\cdot x', processed_text)
+                
+                # Handle dx at the end of integral
+                processed_text = re.sub(r'dx$', '\\,dx', processed_text)
+                
+                # Handle common integral patterns
+                integral_patterns = {
+                    r'\\int(\d+)': r'\\int_{0}^{\\1}',  # Basic definite integral
+                    r'\\int_(\d+)': r'\\int_{\\1}',      # Lower bound
+                    r'\\int\^(\d+)': r'\\int^{\\1}',      # Upper bound
+                    r'\\int_(\d+)\^(\d+)': r'\\int_{\\1}^{\\2}'  # Both bounds
+                }
+                
+                for pattern, replacement in integral_patterns.items():
+                    processed_text = re.sub(pattern, replacement, processed_text)
+            
+            # Handle limit notation patterns
+            if 'lim' in text:
+                # Common limit patterns
+                limit_patterns = {
+                    'lim(x--)': r'\lim_{x \to \infty}',
+                    'lim(x->)': r'\lim_{x \to \infty}',
+                    'lim(x->∞)': r'\lim_{x \to \infty}',
+                    'lim(x->0)': r'\lim_{x \to 0}',
+                    'lim(x->-∞)': r'\lim_{x \to -\infty}',
+                    'lim(n--)': r'\lim_{n \to \infty}',
+                    'lim(n->∞)': r'\lim_{n \to \infty}'
+                }
+                
+                for pattern, replacement in limit_patterns.items():
+                    if pattern in processed_text:
+                        processed_text = processed_text.replace(pattern, replacement)
+                        break
+                
+                # Handle general patterns
+                processed_text = processed_text.replace('lim(x-', r'\lim_{x \to')
+                processed_text = processed_text.replace('lim(n-', r'\lim_{n \to')
+                processed_text = processed_text.replace('--)', r'\infty}')
+                processed_text = processed_text.replace('->)', r'\infty}')
+            
+            # Handle fractions
+            if '/' in processed_text:
+                # Match patterns like "a/b" where a and b can be numbers or variables
+                import re
+                processed_text = re.sub(r'(\d+|[a-zA-Z])/(\d+|[a-zA-Z])', r'\\frac{\1}{\2}', processed_text)
+            
+            # Handle other common mathematical notations
+            common_replacements = {
+                '->': r'\to',
+                '^2': r'^{2}',
+                '^3': r'^{3}',
+                '>=': r'\geq',
+                '<=': r'\leq',
+                '!=': r'\neq',
+                '∞': r'\infty',
+                'pi': r'\pi',
+                'theta': r'\theta',
+                'alpha': r'\alpha',
+                'beta': r'\beta',
+                'sqrt': r'\sqrt'
+            }
+            
+            for pattern, replacement in common_replacements.items():
+                processed_text = processed_text.replace(pattern, replacement)
+            
             # Extract LaTeX if text was found
             latex = None
             if text and self.latex_ocr is not None:
                 try:
                     # Convert numpy array to PIL Image for LaTeX OCR
                     pil_roi = Image.fromarray(roi)
-                    latex = self.latex_ocr(pil_roi)
+                    # Try using processed text if available
+                    if processed_text != text:
+                        latex = processed_text
+                    else:
+                        latex = self.latex_ocr(pil_roi)
                 except Exception as e:
                     print(f"LaTeX extraction error: {e}")
             
