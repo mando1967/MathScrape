@@ -5,6 +5,7 @@ import numpy as np
 import unittest
 from mathscrape import MathScrape
 import cv2
+import matplotlib.pyplot as plt
 
 # Set environment variable to avoid OpenMP initialization error
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
@@ -38,6 +39,9 @@ class TestMathScrape(unittest.TestCase):
         """Helper method to test text preprocessing"""
         processed_text = text
         
+        # Fix common OCR errors first
+        processed_text = processed_text.replace('-+', '-')
+        
         # Handle polynomial terms
         import re
         processed_text = processed_text.replace('x?', 'x^2')
@@ -60,9 +64,9 @@ class TestMathScrape(unittest.TestCase):
         """Test image processing with test math problems"""
         # Create test image with math problems
         img = self._create_test_image([
-            "x?+5x+6=0",
-            "J(x2-+1)dx",
-            "lim(x--)1/x=0"
+            "x^2 + 5x + 6 = 0",
+            "\\int(x^2 - 1)\\,dx",
+            "\\lim_{x \\to \\infty}\\frac{1}{x} = 0"
         ])
         
         # Save test image
@@ -88,23 +92,32 @@ class TestMathScrape(unittest.TestCase):
             
     def _create_test_image(self, expressions):
         """Create a test image with given math expressions"""
-        # Create blank image
-        height = len(expressions) * 50 + 50
-        width = 400
-        img = np.ones((height, width), dtype=np.uint8) * 255
+        # Create matplotlib figure
+        dpi = 100
+        fig = plt.figure(figsize=(8, len(expressions)), dpi=dpi)
         
-        # Add expressions
+        # White background
+        fig.patch.set_facecolor('white')
+        
+        # Add expressions using LaTeX
         for i, expr in enumerate(expressions):
-            cv2.putText(
-                img,
-                expr,
-                (50, 50 + i * 50),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                1,
-                0,
-                2
-            )
-            
+            plt.text(0.1, 0.9 - i * 0.2, f'${expr}$', fontsize=14)
+        
+        # Hide axes
+        plt.axis('off')
+        
+        # Convert to numpy array
+        fig.canvas.draw()
+        img = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+        img = img.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+        
+        # Convert to grayscale
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        
+        # Save test image
+        cv2.imwrite('test_image.png', img)
+        
+        plt.close()
         return img
 
 def test_mathscrape():
