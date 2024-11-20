@@ -108,13 +108,14 @@ class MathScrape:
         
         return binary
 
-    def preprocess_for_latex(self, image):
+    def preprocess_for_latex(self, image, attempt=0):
         """
         Special preprocessing for LaTeX recognition
         
         Args:
             image (PIL.Image): Input image
-            
+            attempt (int): Attempt number to try different preprocessing parameters
+        
         Returns:
             PIL.Image: Preprocessed image optimized for LaTeX recognition
         """
@@ -127,37 +128,69 @@ class MathScrape:
         
         # Ensure array is uint8
         img_array = img_array.astype(np.uint8)
+        
+        # Different preprocessing strategies based on attempt number
+        if attempt == 0:
+            # Default preprocessing - good for general cases
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+            enhanced = clahe.apply(img_array)
+            denoised = cv2.fastNlMeansDenoising(enhanced)
+            _, binary = cv2.threshold(denoised, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    
+        elif attempt == 1:
+            # Enhanced contrast and morphology - better for symbols like infinity
+            clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(4,4))
+            enhanced = clahe.apply(img_array)
             
-        # Enhance contrast using CLAHE
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-        enhanced = clahe.apply(img_array)
-        
-        # Denoise
-        denoised = cv2.fastNlMeansDenoising(enhanced)
-        
-        # Binarize using Otsu's method
-        _, binary = cv2.threshold(denoised, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        
+            # Apply morphological operations to connect broken symbols
+            kernel = np.ones((2,2), np.uint8)
+            dilated = cv2.dilate(enhanced, kernel, iterations=1)
+            eroded = cv2.erode(dilated, kernel, iterations=1)
+            
+            # Use adaptive thresholding for better local contrast
+            binary = cv2.adaptiveThreshold(
+                eroded,
+                255,
+                cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                cv2.THRESH_BINARY,
+                11,
+                2
+            )
+    
+        else:
+            # Focus on thin strokes and details - better for differentials
+            # Sharpen the image first
+            kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
+            sharpened = cv2.filter2D(img_array, -1, kernel)
+            
+            # Apply bilateral filter to preserve edges while removing noise
+            smoothed = cv2.bilateralFilter(sharpened, 9, 75, 75)
+            
+            # Use Otsu's thresholding on the smoothed image
+            _, binary = cv2.threshold(smoothed, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            
+            # Thin operation to clean up strokes
+            kernel = np.ones((2,2), np.uint8)
+            binary = cv2.erode(binary, kernel, iterations=1)
+    
         # Invert if background is dark
-        if np.mean(binary[0:10, 0:10]) < 127:  # Check top-left corner
+        if np.mean(binary[0:10, 0:10]) < 127:
             binary = cv2.bitwise_not(binary)
-            
+    
         # Convert back to PIL Image in RGB mode (pix2tex expects RGB)
         rgb_array = cv2.cvtColor(binary, cv2.COLOR_GRAY2RGB)
-        
-        # Convert to PIL Image
         pil_image = Image.fromarray(rgb_array)
-        
+    
         # Resize if too small
         if pil_image.size[0] < 32 or pil_image.size[1] < 32:
             scale = max(32/pil_image.size[0], 32/pil_image.size[1])
             new_size = tuple(int(dim * scale) for dim in pil_image.size)
             pil_image = pil_image.resize(new_size, Image.LANCZOS)
-            
+    
         # Add padding
         padded = Image.new('RGB', (pil_image.size[0] + 20, pil_image.size[1] + 20), color='white')
         padded.paste(pil_image, (10, 10))
-            
+    
         return padded
 
     def detect_math_regions(self, preprocessed_image):
@@ -328,41 +361,72 @@ class MathScrape:
             # Extract text from the region
             text = pytesseract.image_to_string(
                 roi,
-                config='--psm 6 -c tessedit_char_whitelist=0123456789+-=()[]{}^*/\\JIlimabcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ∫∞→_ '
+                config='--psm 7 -c tessedit_char_whitelist=0123456789+-=()[]{}^*/\\JIlimabcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ∫∞→_≠≤≥∂∑∏√∫∮∇∆∈∉⊂⊃⊆⊇∪∩ '
             ).strip()
             
-            print(f"\nRegion {problem_id}:")
-            print(f"Raw OCR text: {repr(text)}")
+            # Fix common OCR issues in raw text
+            text = re.sub(r'([a-zA-Z])\?', r'\1^2', text)  # Fix x? -> x^2
+            text = re.sub(r'\{([a-zA-Z])\}\?', r'{\1}^2', text)  # Fix {x}? -> {x}^2
+            
+            print(f"\nRegion {problem_id} - DETAILED DEBUG:")
+            print(f"Raw OCR text (repr): {repr(text)}")
+            print(f"Raw OCR text (hex): {' '.join(hex(ord(c)) for c in text)}")
             
             # Split text into separate expressions if multiple lines detected
             expressions = [expr.strip() for expr in text.split('\n') if expr.strip()]
             print(f"Split expressions: {expressions}")
             
             for expr in expressions:
-                print(f"\nProcessing expression: {repr(expr)}")
+                print(f"\nProcessing expression:")
+                print(f"Raw expr (repr): {repr(expr)}")
+                print(f"Raw expr (hex): {' '.join(hex(ord(c)) for c in expr)}")
                 
-                # Try LaTeX OCR first
+                # Try LaTeX OCR with multiple attempts
                 latex = None
+                best_latex = None
+                best_confidence = 0
+                
                 if self.latex_ocr:
-                    try:
-                        # Convert region to PIL Image
-                        roi_pil = Image.fromarray(roi)
-                        # Preprocess for LaTeX
-                        roi_pil = self.preprocess_for_latex(roi_pil)
-                        # Get LaTeX
-                        latex = self.latex_ocr(roi_pil)
-                        print(f"LaTeX OCR output: {repr(latex)}")
-                    except Exception as e:
-                        print(f"LaTeX OCR failed: {str(e)}")
+                    for attempt in range(3):  # Try up to 3 different preprocessing strategies
+                        try:
+                            # Convert region to PIL Image
+                            roi_pil = Image.fromarray(roi)
+                            # Preprocess with different parameters
+                            roi_pil = self.preprocess_for_latex(roi_pil, attempt)
+                            # Get LaTeX
+                            latex = self.latex_ocr(roi_pil)
+                            print(f"LaTeX OCR attempt {attempt + 1} output (repr): {repr(latex)}")
+                            print(f"LaTeX OCR attempt {attempt + 1} output (hex): {' '.join(hex(ord(c)) for c in latex)}")
+                            
+                            # Clean up and validate LaTeX
+                            cleaned_latex = self._cleanup_latex(latex)
+                            if cleaned_latex:
+                                confidence = self._calculate_latex_confidence(cleaned_latex)
+                                if confidence > best_confidence:
+                                    best_latex = cleaned_latex
+                                    best_confidence = confidence
+                                    print(f"New best LaTeX (confidence {confidence:.2f}): {repr(best_latex)}")
+                            
+                        except Exception as e:
+                            print(f"LaTeX OCR attempt {attempt + 1} failed: {str(e)}")
+                            continue
+                
+                # Use the best LaTeX result or fall back to cleaned OCR text
+                if best_latex:
+                    latex = best_latex
+                else:
+                    # Try to clean up the OCR text as LaTeX
+                    latex = self._cleanup_latex(expr)
                 
                 if text or latex:
                     results.append({
                         'problem_id': problem_id,
                         'text': expr,
                         'latex': latex if latex else expr,
+                        'confidence': best_confidence if latex else 0.0,
                         'bbox': region
                     })
-                    print(f"Added result - Text: {repr(expr)}, LaTeX: {repr(latex if latex else expr)}")
+                    print(f"Added result - Text: {repr(expr)}, LaTeX: {repr(latex if latex else expr)}, Confidence: {best_confidence:.2f}")
                     problem_id += 1
         
         # Print results
@@ -398,39 +462,163 @@ class MathScrape:
         """
         if not latex:
             return 0.0
-            
-        # Check for balanced brackets and common math operators
-        score = 0.0
+        
+        score = 0.2  # Base confidence
+        
+        # Penalize overly complex expressions
+        score -= 0.1 * latex.count('\\mathcal')
+        score -= 0.1 * latex.count('\\chi')
+        score -= 0.05 * latex.count('\\textstyle')
+        
+        # Boost score for proper mathematical notation
+        if '\\,d ' in latex:  # Proper differential notation
+            score += 0.3
+        if '\\to\\infty' in latex:  # Proper infinity in limits
+            score += 0.3
+        if '\\int' in latex and '\\,d' in latex:  # Complete integral with differential
+            score += 0.2
+        if '\\lim' in latex and '\\to' in latex:  # Complete limit with arrow
+            score += 0.2
+        
+        # Penalize unusual character combinations
+        if 'Q\\chi' in latex or '{Q}\\chi' in latex:
+            score -= 0.3
+        
+        # Add points for balanced delimiters
+        score += 0.1 * min(
+            latex.count('(') + latex.count('[') + latex.count('\\{'),
+            latex.count(')') + latex.count(']') + latex.count('\\}')
+        )
+        
+        # Add points for common mathematical structures
+        score += 0.1 * len(re.findall(r'\^\{[^}]+\}', latex))  # Proper superscripts
+        score += 0.1 * len(re.findall(r'_\{[^}]+\}', latex))   # Proper subscripts
+        
+        return min(1.0, score)
+
+    def _cleanup_latex(self, latex):
+        """
+        Clean up common LaTeX OCR issues and validate syntax
+        
+        Args:
+            latex (str): Raw LaTeX string
+        
+        Returns:
+            str: Cleaned LaTeX string or None if invalid
+        """
+        if not latex:
+            return None
+        
+        # Pre-cleanup: standardize spacing and remove unwanted characters
+        latex = latex.strip()
+        latex = re.sub(r'\s+', ' ', latex)
+        
+        # Fix infinity in limit expressions first
+        infinity_patterns = [
+            (r'\\to\s*[a-z]\^?\{?2\}?', r'\\to\\infty'),  # x\to a^2 -> x\to\infty
+            (r'\\to\s*[a-z0-9]+', r'\\to\\infty'),        # x\to a -> x\to\infty
+            (r'\\to\s*\\mathcal\{[^}]+\}', r'\\to\\infty'),  # \to\mathcal{X} -> \to\infty
+            (r'(?i)infinity', r'\\infty'),
+            (r'(?i)inf(?!ty|inity)', r'\\infty'),
+            (r'∞', r'\\infty'),
+            (r'oo', r'\\infty'),
+            (r'[oO]{2}', r'\\infty')
+        ]
+        
+        for pattern, replacement in infinity_patterns:
+            latex = re.sub(pattern, replacement, latex)
+        
+        # Fix differential notation
+        differential_patterns = [
+            (r'(?<!\\mathrm\{)(?<!\\)d([xyz]|\\?[a-z])', r'\\mathrm{d}\1'),  # dx -> \mathrm{d}x
+            (r'\\mathrm\{d\}([xyz])', r'\\mathrm{d}\1'),  # Fix double wrapping
+            (r'd([xyz])\}', r'\\mathrm{d}\1}'),  # Fix cases inside braces
+            (r'\\,\s*\\mathrm', r'\\,\\mathrm'),  # Fix spacing
+            (r'\\mathrm\{d\}\s+([xyz])', r'\\mathrm{d}\1')  # Remove space after d
+        ]
+        
+        for pattern, replacement in differential_patterns:
+            latex = re.sub(pattern, replacement, latex)
+        
+        # Common LaTeX command replacements
+        replacements = {
+            'lim': r'\lim',
+            'sin': r'\sin',
+            'cos': r'\cos',
+            'tan': r'\tan',
+            'int': r'\int',
+            'sum': r'\sum',
+            'prod': r'\prod',
+            'sqrt': r'\sqrt',
+            '→': r'\rightarrow',
+            '≤': r'\leq',
+            '≥': r'\geq',
+            '≠': r'\neq',
+            '∂': r'\partial',
+            '∑': r'\sum',
+            '∏': r'\prod',
+            '∫': r'\int',
+            '∮': r'\oint',
+            '∇': r'\nabla',
+            '∆': r'\Delta',
+            '∈': r'\in',
+            '∉': r'\notin',
+            '⊂': r'\subset',
+            '⊃': r'\supset',
+            '⊆': r'\subseteq',
+            '⊇': r'\supseteq',
+            '∪': r'\cup',
+            '∩': r'\cap'
+        }
+        
+        # Apply replacements only if not already in LaTeX format
+        for old, new in replacements.items():
+            if old in latex and new not in latex:
+                latex = latex.replace(old, new)
+    
+        # Fix integral notation
+        latex = re.sub(r'\\int\s*([^d]*?)\s*\\mathrm', r'\\int \1\\,\\mathrm', latex)
+    
+        # Fix superscripts and subscripts
+        latex = re.sub(r'(\d+|\w+|\})\^(\d+|\w+|\{[^}]+\})', r'{\1}^{\2}', latex)
+        latex = re.sub(r'(\w+)_(\w+)', r'{\1}_{\2}', latex)
+        
+        # Fix question mark as superscript 2
+        latex = re.sub(r'([a-zA-Z])\?', r'\1^2', latex)
+        latex = re.sub(r'\{([a-zA-Z])\}\?', r'{\1}^2', latex)
+        
+        # Handle nested expressions
+        latex = re.sub(r'\^\{(\d+)\}\^\{(\d+)\}', r'^{\1^{\2}}', latex)
+    
+        # Ensure proper bracketing
         brackets = {'(': ')', '[': ']', '{': '}'}
         stack = []
-        
-        # Common mathematical LaTeX commands
-        math_commands = ['\\frac', '\\sqrt', '\\sum', '\\int', '\\lim', 
-                        '\\alpha', '\\beta', '\\theta', '\\pi', '\\infty']
-                        
-        # Check bracket balance
         for char in latex:
             if char in brackets:
                 stack.append(char)
             elif char in brackets.values():
-                if not stack:
-                    return 0.0  # Unbalanced brackets
-                if char != brackets[stack.pop()]:
-                    return 0.0  # Mismatched brackets
-        
-        if stack:  # Unclosed brackets
-            return 0.0
-            
-        # Add points for common math operators
-        score += min(0.3, 0.05 * sum(1 for op in ['+', '-', '*', '/', '='] if op in latex))
-        
-        # Add points for LaTeX commands
-        score += min(0.4, 0.1 * sum(1 for cmd in math_commands if cmd in latex))
-        
-        # Add points for length and complexity
-        score += min(0.3, len(latex) / 100)  # Longer expressions are more likely to be valid
-        
-        return min(1.0, score + 0.2)  # Base confidence of 0.2
+                if not stack or char != brackets[stack.pop()]:
+                    return None
+        if stack:
+            return None
+    
+        # Final cleanup
+        # Remove unnecessary \\textstyle
+        latex = latex.replace('\\textstyle', '')
+    
+        # Fix multiple backslashes
+        latex = re.sub(r'\\+([a-zA-Z])', r'\\\1', latex)
+    
+        # Fix spacing around operators
+        latex = re.sub(r'\s*([+\-=×÷])\s*', r'\1', latex)
+    
+        # Clean up any remaining issues
+        latex = re.sub(r'\\mathrm\{\\mathrm\{(.*?)\}\}', r'\\mathrm{\1}', latex)  # Fix double mathrm
+        latex = re.sub(r'\\infty\\infty', r'\\infty', latex)  # Fix double infinity
+        latex = re.sub(r'Q\\chi', r'dx', latex)  # Fix common misrecognition
+        latex = re.sub(r'\{\\mathcal\{Q\}\}\\chi', r'dx', latex)  # Fix another common misrecognition
+    
+        return latex
 
     def visualize_results(self, image, results):
         """

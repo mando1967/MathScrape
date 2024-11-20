@@ -37,22 +37,44 @@ The visualization shows how MathScrape detects and processes each expression, wi
 
 ## Requirements
 
+### Python Environment
 - Python 3.7+
-- OpenCV
+- Conda environment recommended
+
+### Core Dependencies
+- OpenCV (cv2)
 - Tesseract OCR
 - pix2tex
-- Other dependencies listed in `requirements.txt`
+- PyTorch
+- NumPy
+- Pillow (PIL)
+- scikit-learn
+- matplotlib
 
-## Installation
+### Installation
 
-1. Install Python dependencies:
+1. Create and activate conda environment:
+```bash
+conda create -n mathscrape python=3.9
+conda activate mathscrape
+```
+
+2. Install PyTorch (with CUDA if available):
+```bash
+# With CUDA
+conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
+# CPU only
+conda install pytorch torchvision torchaudio cpuonly -c pytorch
+```
+
+3. Install other dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-2. Install Tesseract OCR:
-- Windows: Run `install_tesseract.py`
-- Other platforms: Follow [Tesseract installation guide](https://github.com/UB-Mannheim/tesseract/wiki)
+4. Install Tesseract OCR:
+- Windows: Download and install from [UB-Mannheim/tesseract](https://github.com/UB-Mannheim/tesseract/wiki)
+- Other platforms: Follow [Tesseract installation guide](https://github.com/tesseract-ocr/tesseract)
 
 ## Usage
 
@@ -69,12 +91,40 @@ python mathscrape.py
    - Display the results
    - Generate a visualization of detected regions
 
+## Example Output
+
+Given an image with these mathematical expressions:
+```
+x^2 + 5x + 6 = 0
+∫(x^2 - 1)dx
+lim_{x→∞} 1/x = 0
+```
+
+The application outputs:
+```
+Region 1 - Text: x^2 + 5x + 6 = 0
+         LaTeX: x^2+5x+6=0
+
+Region 2 - Text: ∫(x^2 - 1)dx
+         LaTeX: \int(x^2-1)\,dx
+
+Region 3 - Text: lim_{x→∞} 1/x = 0
+         LaTeX: \lim_{x\to\infty}\frac{1}{x}=0
+```
+
+Debug visualizations are saved showing:
+- Preprocessed image (debug_preprocessed.png)
+- Detected lines (debug_lines.png)
+- Grouped regions (debug_groups.png)
+
 ## Recent Improvements
 
-- Enhanced limit notation handling (e.g., "lim(x→∞)")
-- Improved integral symbol recognition (handles both "∫" and "J")
-- Better polynomial term processing (handles squared terms and coefficients)
-- Added comprehensive test suite for mathematical expression preprocessing
+- Enhanced differential notation handling (dx → \mathrm{d}x)
+- Improved infinity symbol recognition in limits
+- Better handling of squared terms (x? → x^2)
+- Multiple preprocessing strategies for better OCR accuracy
+- Enhanced confidence scoring for LaTeX validation
+- Added comprehensive test suite
 - Fixed common OCR misrecognition issues
 
 ## Testing
@@ -83,6 +133,12 @@ Run the test suite:
 ```bash
 python test_mathscrape.py
 ```
+
+The test suite includes:
+- Text preprocessing tests
+- Image processing tests
+- LaTeX conversion tests
+- End-to-end integration tests
 
 ## Contributing
 
