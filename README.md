@@ -95,21 +95,21 @@ python mathscrape.py
 
 Given an image with these mathematical expressions:
 ```
-x^2 + 5x + 6 = 0
+X^2 + 5x + 6 = 0
 ∫(x^2 - 1)dx
 lim_{x→∞} 1/x = 0
 ```
 
 The application outputs:
 ```
-Region 1 - Text: x^2 + 5x + 6 = 0
-         LaTeX: x^2+5x+6=0
+Region 1 - Text: X^2+5x+6=0
+         LaTeX: {x}^{{2}}+5x+6=0
 
-Region 2 - Text: ∫(x^2 - 1)dx
-         LaTeX: \int(x^2-1)\,dx
+Region 2 - Text: Jx^2-1)ax
+         LaTeX: \int({x}^{{2}}-1)\,d x
 
-Region 3 - Text: lim_{x→∞} 1/x = 0
-         LaTeX: \lim_{x\to\infty}\frac{1}{x}=0
+Region 3 - Text: lime=0
+         LaTeX: \operatorname*{\lim}_{x\to\infty}{=}0
 ```
 
 Debug visualizations are saved showing:
