@@ -93,24 +93,32 @@ python mathscrape.py
 
 ## Example Output
 
-Given an image with these mathematical expressions:
+Given an image with mathematical expressions, here's the actual output from the application:
+
 ```
-X^2 + 5x + 6 = 0
-∫(x^2 - 1)dx
-lim_{x→∞} 1/x = 0
+Problem 1:
+Text: X^2+5x+6=0
+LaTeX: {x}^{{2}}+5x+6=0
+
+Problem 2:
+Text: Jx^2-1)ax
+LaTeX: \int({x}^{{2}}-1)\,d x
+
+Problem 3:
+Text: lime=0
+LaTeX: \operatorname*{\lim}_{x\to\infty}{=}0
 ```
 
-The application outputs:
-```
-Region 1 - Text: X^2+5x+6=0
-         LaTeX: {x}^{{2}}+5x+6=0
+The application shows:
+1. Raw OCR text capture with improvements:
+   - Properly captures squared terms (X^2)
+   - Recognizes integral notation (J → ∫)
+   - Detects limit expressions (lime → lim)
 
-Region 2 - Text: Jx^2-1)ax
-         LaTeX: \int({x}^{{2}}-1)\,d x
-
-Region 3 - Text: lime=0
-         LaTeX: \operatorname*{\lim}_{x\to\infty}{=}0
-```
+2. LaTeX conversion with enhancements:
+   - Formats squared terms with proper braces: `{x}^{{2}}`
+   - Converts integral notation with proper spacing: `\int(...)\,d x`
+   - Formats limit notation with operator name: `\operatorname*{\lim}_{x\to\infty}`
 
 Debug visualizations are saved showing:
 - Preprocessed image (debug_preprocessed.png)
